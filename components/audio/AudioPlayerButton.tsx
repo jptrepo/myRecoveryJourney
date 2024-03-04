@@ -1,10 +1,13 @@
 import { StyleSheet, Text, View } from "react-native";
-import React from "react";
+import React, { useState } from "react";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
 import { Audio } from "expo-av";
 
 const AudioPlayerButton = ({ uri }: { uri: string }) => {
+  const [playing, setPlaying] = useState<boolean>(false);
   const playRecording = async () => {
+    if (playing) return; // If already playing, return immediately
+    setPlaying(true); // Set playing to true when starting to play
     try {
       if (uri) {
         const sound = new Audio.Sound();
@@ -13,6 +16,8 @@ const AudioPlayerButton = ({ uri }: { uri: string }) => {
       }
     } catch (error) {
       console.error("error playing audio", error);
+    } finally {
+      setPlaying(false); // Set playing to false when finished playing
     }
   };
 
