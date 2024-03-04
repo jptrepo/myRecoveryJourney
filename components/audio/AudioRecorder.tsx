@@ -2,9 +2,8 @@ import React, { useState, useEffect } from "react";
 import { StyleSheet, Button, Text, View, TouchableOpacity } from "react-native";
 import { Audio } from "expo-av";
 import { Recording } from "expo-av/build/Audio";
-import * as FileSystem from "expo-file-system";
-import { AssemblyAIConfig } from "../utils/assembly";
-import { handleResponse } from "../utils/responseHandler";
+import { AssemblyAIConfig } from "../../utils/assembly";
+import AudioPlayerButton from "./AudioPlayerButton";
 
 const AudioRecorder = () => {
   const [recording, setRecording] = useState<Recording>();
@@ -16,10 +15,13 @@ const AudioRecorder = () => {
   const [errorMessage, setErrorMessage] = useState<string>("");
 
   // This is where we will handle the audio recording and transcription
+
   const startRecording = async () => {
     setRecording(undefined);
     setUri("");
     setErrorMessage("");
+    setTranscription("");
+    setUploadedUrl("");
     try {
       if (permissionResponse?.status !== "granted") {
         console.log("Requesting permission..");
@@ -57,51 +59,27 @@ const AudioRecorder = () => {
     }
   };
 
-  const playRecording = async () => {
-    try {
-      if (uri) {
-        const sound = new Audio.Sound();
-        await sound.loadAsync({ uri: uri.toString() });
-        await sound.playAsync();
-      }
-    } catch (error) {
-      console.error("error playing audio", error);
-    }
-  };
-
   const transcribe = async () => {
+    let uploadresponse = uploadedUrl;
+    setUploading(true);
     if (uri) {
-      try {
-        setUploading(true);
-
-        //if there is no upload for this audio
-        if (!uploadedUrl) {
-          const uploadresponse = await FileSystem.uploadAsync(
-            AssemblyAIConfig.uploadUrl,
-            uri,
-            {
-              httpMethod: "POST",
-              uploadType: FileSystem.FileSystemUploadType.MULTIPART,
-              fieldName: "file",
-              headers: AssemblyAIConfig.authheaders,
-            }
-          );
-          setUploadedUrl(handleResponse(uploadresponse, "upload_url"));
-        } else {
-          console.log("Attempting to transcribe URL:", uploadedUrl);
-          const transcriptionresponse = await AssemblyAIConfig.transcribeAudio(
-            uploadedUrl
-          );
-          console.log(transcriptionresponse);
-        }
-
-        setUploading(false);
-      } catch (error: any) {
-        console.error("error with audio upload/transcription", error);
-        setErrorMessage(error.message);
-        setUploading(false);
+      //if there is no upload for this audio
+      if (!uploadedUrl) {
+        uploadresponse = await AssemblyAIConfig.uploadAudio(uri);
+        setUploadedUrl(uploadresponse);
       }
-    } else {
+      if (!transcription) {
+        const transcriptionresponse = await AssemblyAIConfig.transcribeAudio(
+          uploadresponse
+        );
+        if (transcriptionresponse) {
+          setTranscription(transcriptionresponse);
+        }
+      } else {
+        setErrorMessage("Already transcribed!");
+      }
+
+      setUploading(false);
     }
   };
 
@@ -113,24 +91,22 @@ const AudioRecorder = () => {
       />
       {uri && (
         <View>
-          <TouchableOpacity onPress={playRecording}>
-            <Text style={styles.linkText}>Play Recording</Text>
-            <Text>{uri}</Text>
-            <Button
-              onPress={transcribe}
-              title={
-                uploading
-                  ? "Transcript Uploading"
-                  : errorMessage
-                  ? "Error. Try again?"
-                  : "Get Transcript"
-              }
-              disabled={uploading}
-            />
-            {errorMessage && (
-              <Text style={styles.errorText}>{errorMessage}</Text>
-            )}
-          </TouchableOpacity>
+          <AudioPlayerButton uri={uri} />
+          <Button
+            onPress={transcribe}
+            title={
+              uploading
+                ? "Transcript Uploading"
+                : errorMessage
+                ? errorMessage
+                : "Get Transcript"
+            }
+            disabled={uploading || Boolean(transcription)}
+          />
+          {errorMessage && <Text style={styles.errorText}>{errorMessage}</Text>}
+          {transcription && (
+            <Text style={styles.transcription}>{transcription}</Text>
+          )}
         </View>
       )}
     </View>
@@ -146,5 +122,8 @@ const styles = StyleSheet.create({
   },
   errorText: {
     color: "red",
+  },
+  transcription: {
+    color: "green",
   },
 });
